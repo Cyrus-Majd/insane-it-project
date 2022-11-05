@@ -64,6 +64,8 @@ signal.signal(signal.SIGINT, sigint_handler)
 # TODO: put your application logic here!
 # Read login credentials for all the users
 # Read secret data of all the users
+
+# STAGE 3
 valid_logins = {}
 def populate_valid_logins():
     with open("passwords.txt", "r") as fp:
@@ -81,9 +83,26 @@ def populate_valid_secrets():
             valid_secrets[each.split()[0]] = each.split()[1]
         print("All valid secrets:\n", valid_secrets)
 populate_valid_secrets()
-# exit()  # TEMP!!!
+
+valid_cookies = {}
+def set_cookies(usr, cookie):
+    valid_cookies[usr] = cookie
+
+def cookie_exists(cookie):
+    for each in valid_cookies:
+        print(each + " " + str(valid_cookies[each]))
+        if (str(cookie).strip() == str(valid_cookies[each]).strip()):
+            print("Cookie match found!")
+            return ("y", each)
+        # print("is ")
+        # print(cookie)
+        # print(" EQUAL to " + str(valid_cookies[each]))
+    return ("n", "meh")
+
 ### Loop to accept incoming HTTP connections and respond.
+tmp = success_page
 while True:
+    success_page = tmp
     client, addr = sock.accept()
     req = client.recv(1024)
 
@@ -92,16 +111,72 @@ while True:
     headers = header_body[0]
     body = '' if len(header_body) == 1 else header_body[1]
     print_value('headers', headers)
+    print("================================")
+    print("REQUEST TYPE: " + headers[0:headers.find("/") - 1] + ".")
     print_value('entity body', body)
 
     # TODO: Put your application logic here!
     # Parse headers and body and perform various actions
 
+    # STAGE 4
+    # Verify request type + invalid login format
+    login_success = False
+    if (headers[0:headers.find("/") - 1] == "POST"):
+        print("====================BODY!!!!!!: " + body)
+        print("====================HEADER!!!!!!: " + str(headers[headers.find("Cookie:") + 14:headers.find("Content") - 1]))
+        print("====================HEAD BODY!!!!!!: " + str(header_body))
+        if (body == "action=logout"): # case F
+            print("logging out!")
+            headers_to_send = 'Set-Cookie: token=' + "ur_mom" + '\r\n'
+            html_content_to_send = login_page
+        # check if cookies poggers
+        elif (headers.find("Cookie:") != -1 and headers.find("Content") != -1 and len(str(headers[headers.find("Cookie:") + 14:headers.find("Content") - 1])) > 0):
+            cookie = str(headers[headers.find("Cookie:") + 14:headers.find("Content") - 1])
+            print("old thing" + cookie)
+            print("GOING THROUGH ALL VALID COOKIES:")
+            if (cookie_exists(cookie)[0] == "y"): # case C
+                matchedUser = cookie_exists(cookie)[1]
+                print("GOOD COOKIE")
+                success_page = success_page + valid_secrets[matchedUser]
+                html_content_to_send = success_page
+                login_success = True
+                headers_to_send = "Set-Cookie: token=" + str(cookie) + "\r\n"
+            elif (cookie_exists(cookie)[0] == "n"): # case D
+                print("ERROR, BAD COOKIE")
+                html_content_to_send = bad_creds_page
+                headers_to_send = "Set-Cookie: token=" + str(cookie) + "\r\n"
+        # moving on to case E
+        elif (body.find("username=") == -1 or body.find("password=") == -1 or len(body[body.find("username=") + 9:body.find("password=") - 1]) < 1 or len(body[body.find("password=") + 9:]) < 1):
+            print("ERROR")
+            html_content_to_send = bad_creds_page
+        else:
+            print(body[body.find("username=") + 9:body.find("password=") - 1])
+            print(body[body.find("password=") + 9:])
+            # case A
+            if (valid_logins.has_key(body[body.find("username=") + 9:body.find("password=") - 1]) and valid_logins[body[body.find("username=") + 9:body.find("password=") - 1]] == body[body.find("password=") + 9:]):
+                print("GOOD CREDS")
+                success_page = success_page + valid_secrets[body[body.find("username=") + 9:body.find("password=") - 1]]
+                html_content_to_send = success_page
+                login_success = True
+                rand_val = random.getrandbits(64)
+                set_cookies(body[body.find("username=") + 9:body.find("password=") - 1], rand_val)
+                print(rand_val)
+                print("============================ COOKIES ARE NOW: " + str(valid_cookies[body[body.find("username=") + 9:body.find("password=") - 1]]))
+                headers_to_send = "Set-Cookie: token=" + str(rand_val) + "\r\n"
+            else: # case B
+                print("BAD CREDS")
+                html_content_to_send = bad_creds_page
+    elif (headers[0:headers.find("/") - 1] == "GET"):
+        headers_to_send = ''
+        html_content_to_send = login_form
+            
+
+
     # You need to set the variables:
     # (1) `html_content_to_send` => add the HTML content you'd
     # like to send to the client.
     # Right now, we just send the default login page.
-    html_content_to_send = login_page
+    # THE CHEESE??? =============================# html_content_to_send = login_page
     # But other possibilities exist, including
     # html_content_to_send = success_page + <secret>
     # html_content_to_send = bad_creds_page
@@ -110,7 +185,7 @@ while True:
     # (2) `headers_to_send` => add any additional headers
     # you'd like to send the client?
     # Right now, we don't send any extra headers.
-    headers_to_send = ''
+    # THE CHEESE PART TWO??? headers_to_send = ''
 
     # Construct and send the final response
     response  = 'HTTP/1.1 200 OK\r\n'
